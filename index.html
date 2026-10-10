@@ -145,7 +145,7 @@ table.px td.cnf{color:var(--ok)}
         <div><label class="f" for="time">Departure</label><input id="time" type="time" value="18:30"></div>
       </div>
       <div class="two row">
-        <div><label class="f" for="trainNo">Train number</label><input id="trainNo" maxlength="10" inputmode="numeric" placeholder="Train no."></div>
+        <div><label class="f" for="trainNo">Train number</label><input id="trainNo"  maxlength="10" inputmode="numeric" placeholder="Train no."></div>
         <div><label class="f" for="trainName">Train name</label><input id="trainName" maxlength="40" placeholder="Train name"></div>
       </div>
       <div class="sub"><b id="paxCount">Passengers 0/6</b>
@@ -318,7 +318,7 @@ $("#form").addEventListener("submit", async e => {
       bookedOn: new Date().toISOString().slice(0, 10)
     });
     toast("Saved. PNR " + pnr);
-    paxEl.innerHTML = ""; addRow(); $("#pnr").value = ""; $("#trainNo").value = ""; $("#trainName").value = "";
+    paxEl.innerHTML = ""; addRow(); $("#pnr").value = ""; 
   } catch (err) { toast("Save failed: " + err.message, true); }
   finally { btn.disabled = false; }
 });
