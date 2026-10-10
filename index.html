@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -380,4 +379,72 @@ function renderList(){
   const el = $("#list");
   if (!tickets.length) { el.innerHTML = `<div class="empty">No tickets yet.<br>Add one from the New ticket tab.</div>`; return; }
   el.innerHTML = tickets.map(t => `
-    <div class="t"
+    <div class="t">
+      <input type="checkbox" data-pnr="${t.pnr}" ${selected.has(t.pnr) ? "checked" : ""} aria-label="Select ${t.pnr}">
+      <div>
+        <div class="pnr">${esc(t.pnr)}</div>
+        <div class="m">${esc(t.from)} to ${esc(t.to)}, ${fmtDate(t.date)}</div>
+        <div class="m">${esc(t.passengers.map(p => p.name).join(", "))}</div>
+      </div>
+      <button class="del" data-del="${t.pnr}">Delete</button>
+    </div>`).join("");
+}
+$("#list").addEventListener("change", e => {
+  const p = e.target.dataset.pnr; if (!p) return;
+  e.target.checked ? selected.add(p) : selected.delete(p);
+});
+$("#list").addEventListener("click", async e => {
+  const p = e.target.dataset.del; if (!p) return;
+  if (!confirm("Delete ticket " + p + "?")) return;
+  try { await store.remove(p); selected.delete(p); toast("Deleted."); }
+  catch (err) { toast("Delete failed: " + err.message, true); }
+});
+$("#selAll").onclick = () => { tickets.forEach(t => selected.add(t.pnr)); renderList(); };
+$("#selNone").onclick = () => { selected.clear(); renderList(); };
+store.subscribe(list => {
+  tickets = list;
+  [...selected].forEach(p => { if (!tickets.some(t => t.pnr === p)) selected.delete(p); });
+  renderList();
+});
+
+/* ===== PDF and Print ===== */
+$("#pdfBtn").onclick = async () => {
+  const list = targets();
+  if (!list.length) return toast("No tickets to export.", true);
+  const btn = $("#pdfBtn"), old = btn.textContent;
+  btn.disabled = true; btn.textContent = "Making PDF...";
+  const stage = $("#stage");
+  try {
+    stage.innerHTML = "";
+    const built = buildSheets(list); stage.appendChild(built);
+    if (document.fonts && document.fonts.ready) await document.fonts.ready;
+    await new Promise(r => setTimeout(r, 150));
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const sheets = [...built.querySelectorAll(".sheet")];
+    for (let i = 0; i < sheets.length; i++) {
+      const canvas = await html2canvas(sheets[i], { scale: 2.5, backgroundColor: "#ffffff", useCORS: true });
+      if (i > 0) pdf.addPage();
+      pdf.addImage(canvas.toDataURL("image/jpeg", 0.95), "JPEG", 0, 0, 210, 297);
+    }
+    pdf.save("Samagam-Tickets-" + new Date().toISOString().slice(0, 10) + ".pdf");
+    toast("PDF ready: " + sheets.length + " page" + (sheets.length > 1 ? "s" : ""));
+  } catch (err) { toast("PDF failed: " + err.message, true); }
+  finally { stage.innerHTML = ""; btn.disabled = false; btn.textContent = old; }
+};
+$("#printBtn").onclick = async () => {
+  const list = targets();
+  if (!list.length) return toast("No tickets to print.", true);
+  $("#printRoot").innerHTML = buildSheets(list).innerHTML;
+  if (document.fonts && document.fonts.ready) await document.fonts.ready;
+  window.print();
+};
+addEventListener("afterprint", () => { $("#printRoot").innerHTML = ""; });
+
+/* ===== Init ===== */
+$("#pnr").value = genPnr();
+$("#date").value = new Date().toISOString().slice(0, 10);
+addRow();
+</script>
+</body>
+</html>
