@@ -63,6 +63,12 @@ input:focus,button:focus-visible{outline:3px solid #8FB3E6;outline-offset:1px}
 .t .pnr{font:600 17px 'IBM Plex Mono',monospace}
 .t .m{font-size:14px;color:#46607e}
 .t .del{border:1px solid #E6B4B0;background:#fff;color:var(--bad);border-radius:8px;padding:8px 12px;min-height:44px;cursor:pointer}
+.chk{display:flex;gap:12px;align-items:center;font-weight:600;margin:2px 0 12px;cursor:pointer}
+.chk input{width:26px;height:26px;min-height:0;padding:0;flex:none}
+#retBox{background:#EAF2FB;border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+#retBox[hidden],#retBanner[hidden],#wantRow[hidden]{display:none}
+.acts{display:flex;flex-direction:column;gap:6px}
+.t .ret{border:1px solid var(--blue);background:#fff;color:var(--blue);border-radius:8px;padding:8px 12px;min-height:44px;cursor:pointer;font-weight:600}
 .empty{padding:22px;text-align:center;color:#46607e;border:2px dashed var(--line);border-radius:10px;background:#fff}
 .hint{font-size:14px;color:#46607e;margin:8px 2px}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;z-index:50;max-width:90vw;text-align:center}
@@ -130,6 +136,8 @@ table.px td.cnf{color:var(--ok)}
   <section id="viewNew" class="view">
     <div id="demoNote" class="note" hidden></div>
     <form id="form" class="card" autocomplete="off" novalidate>
+      <div id="retBanner" class="note" hidden><span id="retBannerTxt"></span>
+        <button type="button" id="retCancel" class="btn ghost" style="min-height:36px;padding:4px 10px;margin-left:6px">Cancel</button></div>
       <div class="row">
         <label class="f" for="pnr">PNR</label>
         <div class="pnrline">
@@ -144,6 +152,22 @@ table.px td.cnf{color:var(--ok)}
       <div class="two row">
         <div><label class="f" for="date">Date</label><input id="date" type="date"></div>
         <div><label class="f" for="time">Departure</label><input id="time" type="time" value="18:30"></div>
+      </div>
+
+      <label class="chk" id="wantRow"><input type="checkbox" id="wantReturn"> Also make return ticket (same passengers)</label>
+      <div id="retBox" hidden>
+        <div class="row">
+          <label class="f" for="retPnr">Return PNR</label>
+          <div class="pnrline">
+            <input id="retPnr" inputmode="numeric" maxlength="10">
+            <button type="button" class="btn ghost" id="retNewPnr">New</button>
+          </div>
+        </div>
+        <div class="two">
+          <div><label class="f" for="retDate">Return date</label><input id="retDate" type="date"></div>
+          <div><label class="f" for="retTime">Return departure</label><input id="retTime" type="time" value="18:30"></div>
+        </div>
+        <div class="hint" style="margin-bottom:0">Route is reversed, passenger names, coach and seat are copied.</div>
       </div>
 
       <div class="sub"><b id="paxCount">Passengers 0/6</b>
@@ -285,6 +309,30 @@ $("#addPax").onclick = () => {
   paxEl.lastElementChild.querySelector(".p-name").focus();
 };
 $("#newPnr").onclick = () => $("#pnr").value = genPnr();
+$("#retNewPnr").onclick = () => $("#retPnr").value = genPnr();
+$("#retPnr").oninput = e => e.target.value = e.target.value.replace(/\D/g, "");
+$("#wantReturn").onchange = e => {
+  $("#retBox").hidden = !e.target.checked;
+  if (e.target.checked && !$("#retDate").value) $("#retDate").value = $("#date").value;
+};
+
+// Make a return ticket from a saved one: reversed route, same passengers
+let returnOf = null;
+function startReturn(t){
+  returnOf = t.pnr;
+  $("#pnr").value = genPnr();
+  $("#from").value = t.to; $("#to").value = t.from;
+  $("#date").value = ""; $("#time").value = t.time;
+  $("#wantReturn").checked = false; $("#retBox").hidden = true; $("#wantRow").hidden = true;
+  paxEl.innerHTML = ""; t.passengers.forEach(p => addRow(p));
+  $("#retBannerTxt").textContent = "Return ticket for PNR " + t.pnr + ". Choose the date, then save.";
+  $("#retBanner").hidden = false;
+  showTab("new"); $("#date").focus();
+}
+function clearReturnMode(){
+  returnOf = null; $("#retBanner").hidden = true; $("#wantRow").hidden = false;
+}
+$("#retCancel").onclick = clearReturnMode;
 $("#pnr").oninput = e => e.target.value = e.target.value.replace(/\D/g, "");
 
 /* ===== Save ===== */
@@ -307,23 +355,46 @@ $("#form").addEventListener("submit", async e => {
   const keys = passengers.map(p => p.coach + "-" + p.seat);
   if (new Set(keys).size !== keys.length) return toast("Two passengers have the same coach and seat.", true);
 
+  // optional return ticket
+  let ret = null;
+  if ($("#wantReturn").checked && !returnOf) {
+    const rp = $("#retPnr").value.trim(), rd = $("#retDate").value, rt = $("#retTime").value;
+    if (!/^\d{10}$/.test(rp)) return toast("Return PNR must be 10 digits.", true);
+    if (rp === pnr) return toast("Return PNR must be different.", true);
+    if (!rd || !rt) return toast("Fill the return date and time.", true);
+    if (rd < $("#date").value) return toast("Return date is before the journey date.", true);
+    ret = { pnr: rp, date: rd, time: rt };
+  }
+
   const btn = $("#saveBtn"); btn.disabled = true;
   try {
     if (await store.exists(pnr)) return toast("This PNR already exists. Tap New.", true);
+    if (ret && await store.exists(ret.pnr)) return toast("Return PNR already exists. Tap New.", true);
+    const from = $("#from").value.trim(), to = $("#to").value.trim();
+    const bookedOn = new Date().toISOString().slice(0, 10);
     await store.save({
-      pnr, passengers,
-      from: $("#from").value.trim(), to: $("#to").value.trim(),
-      date: $("#date").value, time: $("#time").value,
-      bookedOn: new Date().toISOString().slice(0, 10)
+      pnr, passengers, from, to,
+      date: $("#date").value, time: $("#time").value, bookedOn,
+      journey: returnOf ? "return" : "onward",
+      linkedPnr: returnOf || (ret ? ret.pnr : "")
     });
-    toast("Saved. PNR " + pnr);
-    paxEl.innerHTML = ""; addRow(); $("#pnr").value = genPnr();
+    if (ret) await store.save({
+      pnr: ret.pnr, passengers: passengers.map(p => ({ ...p })),
+      from: to, to: from, date: ret.date, time: ret.time, bookedOn,
+      journey: "return", linkedPnr: pnr
+    });
+    toast(ret ? `Saved onward ${pnr} and return ${ret.pnr}` : "Saved. PNR " + pnr);
+    paxEl.innerHTML = ""; addRow();
+    $("#pnr").value = genPnr(); $("#retPnr").value = genPnr();
+    $("#wantReturn").checked = false; $("#retBox").hidden = true; $("#retDate").value = "";
+    clearReturnMode();
   } catch (err) { toast("Save failed: " + err.message, true); }
   finally { btn.disabled = false; }
 });
 
 /* ===== Ticket + A4 sheet (3 per page) ===== */
 function ticketHTML(t){
+  const jl = t.journey === "return" ? "RETURN TICKET &nbsp;PNR" : (t.journey === "onward" && t.linkedPnr ? "ONWARD TICKET &nbsp;PNR" : "PNR");
   const rows = t.passengers.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.age)}</td><td>${esc(p.sex)}</td><td>${esc(p.coach)}</td><td>${esc(p.seat)}</td><td class="cnf">CNF</td></tr>`).join("");
   return `
   <div class="slot"><div class="tkt">
@@ -333,7 +404,7 @@ function ticketHTML(t){
         <h2>79th Annual Nirankari Sant Samagam</h2>
         <div class="hi">धन निरंकार जी &nbsp;|&nbsp; 79वाँ वार्षिक निरंकारी संत समागम</div>
       </div>
-      <div class="tk-pnr"><span class="lb">PNR</span><b>${esc(t.pnr)}</b><img alt="" src="${barcodeURL(t.pnr)}"></div>
+      <div class="tk-pnr"><span class="lb">${jl}</span><b>${esc(t.pnr)}</b><img alt="" src="${barcodeURL(t.pnr)}"></div>
     </div>
     <div class="tk-route">
       <div class="st"><small>From</small><b>${esc(t.from)}</b></div>
@@ -382,11 +453,14 @@ function renderList(){
     <div class="t">
       <input type="checkbox" data-pnr="${t.pnr}" ${selected.has(t.pnr) ? "checked" : ""} aria-label="Select ${t.pnr}">
       <div>
-        <div class="pnr">${esc(t.pnr)}</div>
+        <div class="pnr">${esc(t.pnr)}${t.journey === "return" ? " (return)" : ""}</div>
         <div class="m">${esc(t.from)} to ${esc(t.to)}, ${fmtDate(t.date)}</div>
         <div class="m">${esc(t.passengers.map(p => p.name).join(", "))}</div>
       </div>
-      <button class="del" data-del="${t.pnr}">Delete</button>
+      <div class="acts">
+        <button class="ret" data-ret="${t.pnr}">Return</button>
+        <button class="del" data-del="${t.pnr}">Delete</button>
+      </div>
     </div>`).join("");
 }
 $("#list").addEventListener("change", e => {
@@ -394,6 +468,8 @@ $("#list").addEventListener("change", e => {
   e.target.checked ? selected.add(p) : selected.delete(p);
 });
 $("#list").addEventListener("click", async e => {
+  const rp = e.target.dataset.ret;
+  if (rp) { const t = tickets.find(x => x.pnr === rp); if (t) startReturn(t); return; }
   const p = e.target.dataset.del; if (!p) return;
   if (!confirm("Delete ticket " + p + "?")) return;
   try { await store.remove(p); selected.delete(p); toast("Deleted."); }
@@ -443,6 +519,7 @@ addEventListener("afterprint", () => { $("#printRoot").innerHTML = ""; });
 
 /* ===== Init ===== */
 $("#pnr").value = genPnr();
+$("#retPnr").value = genPnr();
 $("#date").value = new Date().toISOString().slice(0, 10);
 addRow();
 </script>
