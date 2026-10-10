@@ -1,1 +1,383 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Samagam Ticket Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600&family=Barlow+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;600&family=Noto+Sans+Devanagari:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.11.6/JsBarcode.all.min.js"></script>
+<style>
+:root{--ink:#10233D;--blue:#1F4E8C;--sky:#DCE6F2;--paper:#F4F8FC;--page:#E6ECF3;--saffron:#E58A1F;--line:#B9C6D6;--ok:#1E7B4B;--bad:#B3261E}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:'Barlow',system-ui,sans-serif;font-size:17px;line-height:1.35}
+button,input{font:inherit;color:inherit}
+
+/* ---------- App (mobile first) ---------- */
+.top{background:var(--ink);color:#fff;padding:14px 16px 12px;text-align:center}
+.top .bl{color:#FFD08A;font-weight:500;font-size:15px}
+.top h1{margin:2px 0 0;font:700 22px/1.15 'Barlow Condensed',sans-serif}
+.stripe{height:5px;background:repeating-linear-gradient(90deg,var(--saffron) 0 24px,#fff 24px 32px,var(--blue) 32px 56px,#fff 56px 64px)}
+.tabs{display:grid;grid-template-columns:1fr 1fr;position:sticky;top:0;z-index:10;background:#fff;border-bottom:1px solid var(--line)}
+.tabs button{border:0;background:#fff;padding:14px 8px;font-weight:600;font-size:17px;border-bottom:4px solid transparent;cursor:pointer}
+.tabs button.on{color:var(--blue);border-bottom-color:var(--blue)}
+main{max-width:640px;margin:0 auto;padding:14px 12px 40px}
+.view[hidden]{display:none}
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px}
+
+label.f{display:block;font-size:14px;font-weight:600;margin:0 0 4px}
+input{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:#fff;min-height:48px;font-size:16px}
+input:focus,button:focus-visible{outline:3px solid #8FB3E6;outline-offset:1px}
+.row{margin-bottom:12px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pnrline{display:flex;gap:8px}
+.pnrline input{font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:1px}
+
+.btn{border:0;border-radius:8px;padding:12px 16px;font-weight:600;cursor:pointer;min-height:48px;font-size:16px}
+.btn.primary{background:var(--blue);color:#fff}
+.btn.saffron{background:var(--saffron);color:#1d1203}
+.btn.ghost{background:#fff;border:1px solid var(--line)}
+.btn[disabled]{opacity:.5}
+.btn.block{width:100%}
+
+.sub{display:flex;justify-content:space-between;align-items:center;margin:16px 0 8px}
+.sub b{font:700 20px 'Barlow Condensed',sans-serif}
+.p{border:1px solid var(--line);border-left:5px solid var(--blue);border-radius:8px;padding:10px;margin-bottom:10px;background:var(--paper)}
+.p .ph{display:flex;justify-content:space-between;align-items:center;font-weight:600;font-size:14px;margin-bottom:8px}
+.p .x{border:0;background:none;color:var(--bad);font-size:26px;line-height:1;padding:0 8px;cursor:pointer}
+.prow{display:grid;grid-template-columns:70px 1fr 1fr 1fr;gap:8px}
+.prow .nm{grid-column:1/-1}
+.sexbtn{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:#fff;min-height:48px}
+.sexbtn button{flex:1;border:0;background:#fff;font-weight:600;cursor:pointer;padding:0}
+.sexbtn button.on{background:var(--blue);color:#fff}
+.note{background:#FFF3DF;border:1px solid #F0C98B;border-radius:8px;padding:10px 12px;font-size:14px;margin-bottom:12px}
+
+/* tickets list */
+.bar{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.bar .btn.ghost{grid-column:span 1}
+.t{display:grid;grid-template-columns:auto 1fr auto;gap:12px;align-items:center;background:#fff;border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}
+.t input[type=checkbox]{width:26px;height:26px;min-height:0;padding:0}
+.t .pnr{font:600 17px 'IBM Plex Mono',monospace}
+.t .m{font-size:14px;color:#46607e}
+.t .del{border:1px solid #E6B4B0;background:#fff;color:var(--bad);border-radius:8px;padding:8px 12px;min-height:44px;cursor:pointer}
+.empty{padding:22px;text-align:center;color:#46607e;border:2px dashed var(--line);border-radius:10px;background:#fff}
+.hint{font-size:14px;color:#46607e;margin:8px 2px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:#fff;padding:12px 18px;border-radius:8px;z-index:50;max-width:90vw;text-align:center}
+.toast.bad{background:var(--bad)}
+
+/* ---------- Ticket + A4 sheet (mm) ---------- */
+.sheet{width:210mm;height:297mm;background:#fff;position:relative;overflow:hidden;font-family:'IBM Plex Mono',monospace;color:var(--ink)}
+.slot{height:99mm;padding:5mm 10mm;position:relative}
+.slot:not(:last-child){border-bottom:0.3mm dashed #666}
+.slot:not(:last-child)::after{content:"\2702";position:absolute;left:3mm;bottom:-2.9mm;font-size:10pt;line-height:1;background:#fff;padding:0 1mm;color:#444;font-family:'Noto Sans Devanagari',sans-serif}
+.tkt{width:190mm;height:89mm;border:0.45mm solid var(--ink);border-radius:2mm;background:var(--paper);display:flex;flex-direction:column;overflow:hidden}
+.tk-head{height:22mm;background:var(--ink);color:#fff;display:flex;justify-content:space-between;align-items:center;padding:0 5mm;border-bottom:1mm solid var(--saffron);flex:none}
+.tk-head .bl{color:#FFD08A;font:500 8.5pt 'Barlow',sans-serif}
+.tk-head h2{margin:0.5mm 0 0;font:700 16pt/1.05 'Barlow Condensed',sans-serif;letter-spacing:.3pt}
+.tk-head .hi{font:500 7pt 'Noto Sans Devanagari',sans-serif;opacity:.85;margin-top:0.8mm}
+.tk-pnr{text-align:right;display:flex;flex-direction:column;align-items:flex-end}
+.tk-pnr .lb{font:500 7pt 'Barlow',sans-serif;opacity:.8}
+.tk-pnr b{font:600 13pt/1.1 'IBM Plex Mono',monospace;letter-spacing:.6pt}
+.tk-pnr img{width:42mm;height:7.5mm;margin-top:1mm;background:#fff;padding:0.6mm 1mm;border-radius:0.8mm;display:block}
+.tk-route{flex:none;display:flex;justify-content:space-between;align-items:center;gap:4mm;padding:2.4mm 5mm;border-bottom:0.3mm solid var(--line)}
+.tk-route small{display:block;font:500 6.5pt 'Barlow',sans-serif;color:#46607e}
+.tk-route .st{max-width:55mm}
+.tk-route .st b{font:700 13pt/1.1 'Barlow Condensed',sans-serif}
+.tk-route .arrow{flex:1;position:relative;border-top:0.5mm solid var(--ink);height:0;min-width:10mm}
+.tk-route .arrow::after{content:"";position:absolute;right:-0.3mm;top:-1.4mm;border-left:2.4mm solid var(--ink);border-top:1.15mm solid transparent;border-bottom:1.15mm solid transparent}
+.tk-meta{display:flex;gap:5mm}
+.tk-meta b{font:600 8.5pt 'IBM Plex Mono',monospace}
+.tk-body{flex:1;padding:1.8mm 5mm 0;min-height:0}
+table.px{width:100%;border-collapse:collapse;table-layout:fixed;font-size:8.5pt}
+table.px th{background:var(--sky);font:600 6.8pt 'Barlow',sans-serif;text-align:left;padding:0.7mm 1.2mm;height:4.6mm;border-bottom:0.3mm solid var(--ink)}
+table.px td{height:5.2mm;padding:0 1.2mm;border-bottom:0.2mm solid #cdd8e5;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-weight:600}
+table.px td.cnf{color:var(--ok)}
+.tk-foot{flex:none;display:flex;justify-content:space-between;align-items:center;padding:0 5mm;height:6.5mm;border-top:0.3mm dashed var(--ink);font:500 6.5pt 'Barlow',sans-serif;color:#33506f}
+.tk-foot .bl{font-weight:600;color:var(--ink)}
+
+#printRoot{display:none}
+@page{size:A4;margin:0}
+@media print{
+  html,body{background:#fff}
+  body>*:not(#printRoot){display:none!important}
+  #printRoot{display:block}
+  #printRoot .sheet{page-break-after:always;break-after:page}
+  #printRoot .sheet:last-child{page-break-after:auto;break-after:auto}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="top">
+    <div class="bl">Dhan Nirankar Ji 🙏</div>
+    <h1>79th Annual Nirankari Sant Samagam</h1>
+  </div>
+  <div class="stripe"></div>
+</header>
+
+<nav class="tabs">
+  <button id="tabNew" class="on">New ticket</button>
+  <button id="tabList">Tickets <span id="count"></span></button>
+</nav>
+
+<main>
+  <!-- ========== NEW TICKET ========== -->
+  <section id="viewNew" class="view">
+    <div id="demoNote" class="note" hidden></div>
+    <form id="form" class="card" autocomplete="off" novalidate>
+      <div class="row">
+        <label class="f" for="pnr">PNR</label>
+        <div class="pnrline">
+          <input id="pnr" inputmode="numeric" maxlength="10">
+          <button type="button" class="btn ghost" id="newPnr">New</button>
+        </div>
+      </div>
+      <div class="two row">
+        <div><label class="f" for="from">From</label><input id="from" maxlength="30" placeholder="City"></div>
+        <div><label class="f" for="to">To</label><input id="to" maxlength="30" value="Samagam Ground"></div>
+      </div>
+      <div class="two row">
+        <div><label class="f" for="date">Date</label><input id="date" type="date"></div>
+        <div><label class="f" for="time">Departure</label><input id="time" type="time" value="18:30"></div>
+      </div>
+
+      <div class="sub"><b id="paxCount">Passengers 0/6</b>
+        <button type="button" class="btn ghost" id="addPax">+ Add</button></div>
+      <div id="pax"></div>
+
+      <button class="btn primary block" type="submit" id="saveBtn">Save ticket</button>
+    </form>
+  </section>
+
+  <!-- ========== TICKETS ========== -->
+  <section id="viewList" class="view" hidden>
+    <div class="bar">
+      <button class="btn saffron" id="pdfBtn">Download PDF</button>
+      <button class="btn primary" id="printBtn">Print</button>
+      <button class="btn ghost" id="selAll">Select all</button>
+      <button class="btn ghost" id="selNone">Clear</button>
+    </div>
+    <div id="list"></div>
+    <p class="hint">Tick tickets to choose them. If none are ticked, all tickets are used. A4 page = 3 tickets, with cut lines.</p>
+  </section>
+</main>
+
+<div id="printRoot"></div>
+<div id="stage" style="position:fixed;left:-10000px;top:0"></div>
+
+<script type="module">
+/* ===== Paste your Firebase config here (Firebase Console > Project settings) ===== */
+const firebaseConfig = {
+  apiKey: "AIzaSyCTLn4g2_i5xJ8kcheWF9HdBL6e2uBxdsE",
+  databaseURL: 'https://copypaste-7012d-default-rtdb.firebaseio.com',
+  authDomain: "copypaste-7012d.firebaseapp.com",
+  projectId: "copypaste-7012d",
+  storageBucket: "copypaste-7012d.firebasestorage.app",
+  messagingSenderId: "222988500391",
+  appId: "1:222988500391:web:5e7b4a849d070c6dae8a82"
+};
+const COLLECTION = "tickets";
+const MAX_PAX = 6;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function toast(msg, bad){
+  const t = document.createElement("div");
+  t.className = "toast" + (bad ? " bad" : ""); t.textContent = msg;
+  document.body.appendChild(t); setTimeout(() => t.remove(), 3000);
+}
+
+/* ===== Storage: Firestore, or in-memory demo until config is filled ===== */
+const demo = firebaseConfig.apiKey.startsWith("YOUR_");
+let store;
+if (demo) {
+  let list = []; const subs = [];
+  const emit = () => subs.forEach(cb => cb([...list]));
+  store = {
+    async exists(p){ return list.some(t => t.pnr === p); },
+    async save(t){ list.unshift({ ...t }); emit(); },
+    async remove(p){ list = list.filter(t => t.pnr !== p); emit(); },
+    subscribe(cb){ subs.push(cb); cb([...list]); }
+  };
+  const n = $("#demoNote"); n.hidden = false;
+  n.textContent = "Demo mode: tickets are kept on this page only. Paste your Firebase config in the file to save to Firestore.";
+} else {
+  const { initializeApp } = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js");
+  const fs = await import("https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js");
+  const db = fs.getFirestore(initializeApp(firebaseConfig));
+  store = {
+    async exists(p){ return (await fs.getDoc(fs.doc(db, COLLECTION, p))).exists(); },
+    async save(t){ await fs.setDoc(fs.doc(db, COLLECTION, t.pnr), { ...t, createdAt: fs.serverTimestamp() }); },
+    async remove(p){ await fs.deleteDoc(fs.doc(db, COLLECTION, p)); },
+    subscribe(cb){
+      fs.onSnapshot(fs.query(fs.collection(db, COLLECTION), fs.orderBy("createdAt", "desc")),
+        snap => cb(snap.docs.map(d => d.data())),
+        err => toast("Could not load tickets: " + err.message, true));
+    }
+  };
+}
+
+/* ===== Helpers ===== */
+const genPnr = () => String(2 + Math.floor(Math.random()*7)) + String(Math.floor(Math.random()*1e9)).padStart(9, "0");
+const fmtDate = iso => {
+  if (!iso) return "";
+  return new Date(iso + "T00:00:00").toLocaleDateString("en-GB", { day:"2-digit", month:"short", year:"numeric" }).replace(/ /g, "-");
+};
+function barcodeURL(text){
+  const c = document.createElement("canvas");
+  JsBarcode(c, text, { format:"CODE128", width:2, height:40, displayValue:false, margin:0 });
+  return c.toDataURL("image/png");
+}
+
+/* ===== Tabs ===== */
+function showTab(name){
+  $("#viewNew").hidden = name !== "new";
+  $("#viewList").hidden = name !== "list";
+  $("#tabNew").classList.toggle("on", name === "new");
+  $("#tabList").classList.toggle("on", name === "list");
+  scrollTo(0, 0);
+}
+$("#tabNew").onclick = () => showTab("new");
+$("#tabList").onclick = () => showTab("list");
+
+/* ===== Passenger rows (max 6) ===== */
+const paxEl = $("#pax");
+function refreshPax(){
+  const rows = [...paxEl.children];
+  rows.forEach((r, i) => {
+    r.querySelector(".pn").textContent = "Passenger " + (i + 1);
+    r.querySelector(".x").hidden = rows.length === 1;
+  });
+  $("#paxCount").textContent = `Passengers ${rows.length}/${MAX_PAX}`;
+  $("#addPax").disabled = rows.length >= MAX_PAX;
+}
+function addRow(d = {}){
+  if (paxEl.children.length >= MAX_PAX) return;
+  const r = document.createElement("div");
+  r.className = "p"; r.dataset.sex = d.sex || "M";
+  r.innerHTML = `
+    <div class="ph"><span class="pn"></span><button type="button" class="x" aria-label="Remove">&times;</button></div>
+    <div class="prow">
+      <input class="nm p-name" placeholder="Full name" maxlength="40" autocapitalize="words" value="${esc(d.name)}">
+      <input class="p-age" type="number" inputmode="numeric" min="1" max="120" placeholder="Age" value="${esc(d.age)}">
+      <div class="sexbtn">
+        <button type="button" data-s="M">M</button><button type="button" data-s="F">F</button>
+      </div>
+      <input class="p-coach" placeholder="Coach" maxlength="4" autocapitalize="characters" value="${esc(d.coach)}">
+      <input class="p-seat" placeholder="Seat" maxlength="4" inputmode="numeric" value="${esc(d.seat)}">
+    </div>`;
+  const paint = () => r.querySelectorAll(".sexbtn button").forEach(b => b.classList.toggle("on", b.dataset.s === r.dataset.sex));
+  r.querySelectorAll(".sexbtn button").forEach(b => b.onclick = () => { r.dataset.sex = b.dataset.s; paint(); });
+  r.querySelector(".x").onclick = () => { r.remove(); refreshPax(); };
+  r.querySelector(".p-coach").oninput = e => e.target.value = e.target.value.toUpperCase();
+  paint(); paxEl.appendChild(r); refreshPax();
+}
+// New row copies the coach and suggests the next seat number
+$("#addPax").onclick = () => {
+  const last = paxEl.lastElementChild;
+  const seat = last ? parseInt(last.querySelector(".p-seat").value, 10) : NaN;
+  addRow({ coach: last ? last.querySelector(".p-coach").value : "", seat: isNaN(seat) ? "" : seat + 1, sex: last ? last.dataset.sex : "M" });
+  paxEl.lastElementChild.querySelector(".p-name").focus();
+};
+$("#newPnr").onclick = () => $("#pnr").value = genPnr();
+$("#pnr").oninput = e => e.target.value = e.target.value.replace(/\D/g, "");
+
+/* ===== Save ===== */
+$("#form").addEventListener("submit", async e => {
+  e.preventDefault();
+  const pnr = $("#pnr").value.trim();
+  if (!/^\d{10}$/.test(pnr)) return toast("PNR must be 10 digits.", true);
+  for (const id of ["from", "to", "date", "time"])
+    if (!$("#" + id).value.trim()) { $("#" + id).focus(); return toast("Please fill From, To, Date and Departure.", true); }
+
+  const passengers = [...paxEl.children].map(r => ({
+    name: r.querySelector(".p-name").value.trim(),
+    age: r.querySelector(".p-age").value.trim(),
+    sex: r.dataset.sex,
+    coach: r.querySelector(".p-coach").value.trim().toUpperCase(),
+    seat: r.querySelector(".p-seat").value.trim()
+  }));
+  const bad = passengers.findIndex(p => !p.name || !p.age || !p.coach || !p.seat || +p.age < 1 || +p.age > 120);
+  if (bad >= 0) return toast(`Passenger ${bad + 1}: fill name, age, coach and seat.`, true);
+  const keys = passengers.map(p => p.coach + "-" + p.seat);
+  if (new Set(keys).size !== keys.length) return toast("Two passengers have the same coach and seat.", true);
+
+  const btn = $("#saveBtn"); btn.disabled = true;
+  try {
+    if (await store.exists(pnr)) return toast("This PNR already exists. Tap New.", true);
+    await store.save({
+      pnr, passengers,
+      from: $("#from").value.trim(), to: $("#to").value.trim(),
+      date: $("#date").value, time: $("#time").value,
+      bookedOn: new Date().toISOString().slice(0, 10)
+    });
+    toast("Saved. PNR " + pnr);
+    paxEl.innerHTML = ""; addRow(); $("#pnr").value = genPnr();
+  } catch (err) { toast("Save failed: " + err.message, true); }
+  finally { btn.disabled = false; }
+});
+
+/* ===== Ticket + A4 sheet (3 per page) ===== */
+function ticketHTML(t){
+  const rows = t.passengers.map((p, i) => `<tr><td>${i + 1}</td><td>${esc(p.name)}</td><td>${esc(p.age)}</td><td>${esc(p.sex)}</td><td>${esc(p.coach)}</td><td>${esc(p.seat)}</td><td class="cnf">CNF</td></tr>`).join("");
+  return `
+  <div class="slot"><div class="tkt">
+    <div class="tk-head">
+      <div>
+        <div class="bl">Dhan Nirankar Ji 🙏</div>
+        <h2>79th Annual Nirankari Sant Samagam</h2>
+        <div class="hi">धन निरंकार जी &nbsp;|&nbsp; 79वाँ वार्षिक निरंकारी संत समागम</div>
+      </div>
+      <div class="tk-pnr"><span class="lb">PNR</span><b>${esc(t.pnr)}</b><img alt="" src="${barcodeURL(t.pnr)}"></div>
+    </div>
+    <div class="tk-route">
+      <div class="st"><small>From</small><b>${esc(t.from)}</b></div>
+      <div class="arrow"></div>
+      <div class="st"><small>To</small><b>${esc(t.to)}</b></div>
+      <div class="tk-meta">
+        <div><small>Date</small><b>${fmtDate(t.date)}</b></div>
+        <div><small>Departs</small><b>${esc(t.time)}</b></div>
+      </div>
+    </div>
+    <div class="tk-body">
+      <table class="px">
+        <colgroup><col style="width:7mm"><col><col style="width:12mm"><col style="width:11mm"><col style="width:18mm"><col style="width:18mm"><col style="width:15mm"></colgroup>
+        <thead><tr><th>#</th><th>Passenger name</th><th>Age</th><th>Sex</th><th>Coach</th><th>Seat</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="tk-foot">
+      <span>Carry a valid photo ID.</span>
+      <span class="bl">Dhan Nirankar Ji 🙏</span>
+      <span>Booked ${fmtDate(t.bookedOn)}</span>
+    </div>
+  </div></div>`;
+}
+function buildSheets(list){
+  const wrap = document.createElement("div");
+  for (let i = 0; i < list.length; i += 3) {
+    const s = document.createElement("div");
+    s.className = "sheet";
+    s.innerHTML = list.slice(i, i + 3).map(ticketHTML).join("");
+    wrap.appendChild(s);
+  }
+  return wrap;
+}
+
+/* ===== Saved list ===== */
+let tickets = [];
+const selected = new Set();
+const targets = () => selected.size ? tickets.filter(t => selected.has(t.pnr)) : tickets;
+
+function renderList(){
+  $("#count").textContent = tickets.length ? `(${tickets.length})` : "";
+  const el = $("#list");
+  if (!tickets.length) { el.innerHTML = `<div class="empty">No tickets yet.<br>Add one from the New ticket tab.</div>`; return; }
+  el.innerHTML = tickets.map(t => `
+    <div class="t"
